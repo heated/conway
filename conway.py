@@ -12,10 +12,10 @@ class Board:
 
 	def step(self):
 		self.living_cells = self.next_generation()
-		return self.living_cells
+		return self
 
 	def __str__(self):
-		return str(self.living_cells)
+		return str(list(self.living_cells))
 
 class Cell:
 	'''a single cell in the game of life'''
@@ -94,6 +94,8 @@ class Position:
 	def __repr__(self):
 		return self.__str__()
 
-sample_board = Board([(0, 0), (0, 1), (0, 2)])
-for i in range(10):
-	print sample_board.step()
+blinker = Board([(0, 0), (0, 1), (0, 2)])
+glider = Board([(0, 0), (0, 1), (0, 2), (1, 2), (2, 1)])
+
+# for i in range(100):
+# 	print glider.step()

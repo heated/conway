@@ -72,11 +72,11 @@ int main(void) {
 
   gettimeofday(&stop, NULL);
 
-  float seconds = (stop.tv_usec - start.tv_usec) / 1000000.0 + stop.tv_sec - start.tv_sec;
+  float seconds = (stop.tv_usec - start.tv_usec) / 1e6 + stop.tv_sec - start.tv_sec;
   int ops = size * size * test_length;
 
   // printCells(cells);
-  printf("Efficiency in cellhz: %f\n", ops / seconds);    
+  printf("C Efficiency in cellhz: %f\n", ops / seconds);    
 
   return 0;
 }
