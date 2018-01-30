@@ -1,3 +1,4 @@
+#include <iostream>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <math.h>
@@ -76,7 +77,7 @@ int main(void) {
   int ops = size * size * test_length;
 
   // printCells(cells);
-  printf("C Efficiency in cellhz: %f\n", ops / seconds);
+  std::cout << "C++ Efficiency in cellhz: " << ops / seconds << std::endl;
 
   return 0;
 }
