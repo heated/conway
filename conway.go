@@ -27,9 +27,9 @@ func randomizeCells() {
 }
 
 func printCells() {
-	for i := 0; i < size; i++ {
-		for j := 0; j < size; j++ {
-			if cells[i][j] {
+    for _, col := range cells {
+        for _, cell := range col {
+			if cell {
 				print("o")
 			} else {
 				print(" ")

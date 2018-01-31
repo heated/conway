@@ -76,7 +76,7 @@ int main(void) {
   int ops = size * size * test_length;
 
   // printCells(cells);
-  printf("C Efficiency in cellhz: %f\n", ops / seconds);
+  printf("C Efficiency in cellhz: %e\n", 1.0 * ops / seconds);
 
   return 0;
 }
