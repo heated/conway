@@ -49,7 +49,7 @@ func (c *Changelog) Reset() {
 	c.internal = make(map[point]bool)
 }
 
-const target int = 1e8
+const target int = 1e7
 const size = 100
 const gens int = target / size / size
 const threads = 4
@@ -184,8 +184,7 @@ func main() {
 	for i := 0; i < gens; i++ {
 		next_gen()
 	}
-	seconds := time.Now().Sub(start).Seconds()
+	seconds := time.Since(start).Seconds()
 
-	print_cells()
 	println("Go Efficiency in cellhz:", float64(gens*size*size)/seconds)
 }

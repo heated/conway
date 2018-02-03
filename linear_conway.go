@@ -136,8 +136,7 @@ func main() {
 	for i := 0; i < gens; i++ {
 		next_gen()
 	}
-	seconds := time.Now().Sub(start).Seconds()
+	seconds := time.Since(start).Seconds()
 
-	print_cells()
 	println("Go Efficiency in cellhz:", float64(gens*size*size)/seconds)
 }
