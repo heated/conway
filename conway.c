@@ -5,77 +5,66 @@
 #include <string.h>
 #include <sys/time.h>
 
-#define size 1000
-#define test_length 10
+#define size 1024
+#define gens 10
 
-bool coinflip() {
-  return rand() % 2 == 0;
-}
+bool cells[size][size];
+bool new_cells[size][size];
 
-void randomizeCells(bool cells[size][size]) {
-  for (int i = 0; i < size; ++i) {
-    for (int j = 0; j < size; ++j) {
-      cells[i][j] = coinflip();
+void randomizeCells() {
+  for (int x = 0; x < size; ++x) {
+    for (int y = 0; y < size; ++y) {
+      cells[x][y] = rand() % 2 == 0;
     }
   }
 }
 
-void printCells(bool cells[size][size]) {
-  for (int i = 0; i < size; ++i) {
-    for (int j = 0; j < size; ++j) {
-      printf(cells[i][j] ? "o" : " ");
+void printCells() {
+  for (int x = 0; x < size; ++x) {
+    for (int y = 0; y < size; ++y) {
+      printf(cells[x][y] ? "o" : " ");
     }
     printf("\n");
   }
 }
 
-void nextGeneration(bool cells[size][size]) {
-  bool new_cells[size][size];
-  memset(new_cells, false, sizeof(bool) * size * size);
-
-  for (int i = 0; i < size; ++i) {
-    for (int j = 0; j < size; ++j) {
+void nextGeneration() {
+  for (int x = 0; x < size; ++x) {
+    for (int y = 0; y < size; ++y) {
       int neighbors = 0;
 
       for (int dx = -1; dx <= 1; ++dx) {
         for (int dy = -1; dy <= 1; ++dy) {
-          int x = (size + i + dx) % size;
-          int y = (size + j + dy) % size;
-          if ((dx != 0 || dy != 0) && cells[x][y]) {
+          int nx = (size + x + dx) % size;
+          int ny = (size + y + dy) % size;
+          if ((dx != 0 || dy != 0) && cells[nx][ny]) {
             neighbors++;
           }
         }
       }
 
-      new_cells[i][j] = neighbors == 3 || neighbors == 2 && cells[i][j];
+      new_cells[x][y] = neighbors == 3 || (neighbors == 2 && cells[x][y]);
     }
   }
 
-  for (int i = 0; i < size; ++i) {
-    for (int j = 0; j < size; ++j) {
-      cells[i][j] = new_cells[i][j];
-    }
-  }
+  memcpy(cells, new_cells, sizeof cells);
 }
 
 int main(void) {
-  bool cells[size][size];
-
-  randomizeCells(cells);
+  randomizeCells();
 
   struct timeval start, stop;
   gettimeofday(&start, NULL);
 
-  for (int i = 0; i < test_length; ++i) {
-    nextGeneration(cells);
+  for (int i = 0; i < gens; ++i) {
+    nextGeneration();
   }
 
   gettimeofday(&stop, NULL);
 
   float seconds = (stop.tv_usec - start.tv_usec) / 1e6 + stop.tv_sec - start.tv_sec;
-  int ops = size * size * test_length;
+  int ops = size * size * gens;
 
-  // printCells(cells);
   printf("C Efficiency in cellhz: %e\n", 1.0 * ops / seconds);
 
   return 0;

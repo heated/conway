@@ -1,8 +1,4 @@
 #include <iostream>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <math.h>
-#include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
 
@@ -25,12 +21,13 @@ void randomizeCells() {
 }
 
 void printCells() {
+  std::cout << "\033[H\033[2J";
   for (int x = 0; x < rows && x < 16; ++x) {
     for (int y = 0; y < 16; ++y) {
-      bool on = (cells[x][0]>>uint(60-y*4))&1 == 1;
-      printf(on ? "o" : " ");
+      bool on = ((cells[x][0] >> uint(60-y*4))&1) == 1;
+      std::cout << (on ? "o" : " ");
     }
-    printf("\n");
+    std::cout << "\n";
   }
 }
 
@@ -52,23 +49,12 @@ void nextGeneration() {
             int nx = (rows + x + dx) % rows;
             int ny = (cols + y + dy) % cols;
 
-            uint64_t alive;
-            uint64_t most = cells[nx][y];
+            uint64_t alive = cells[nx][y];
             uint64_t last = cells[nx][ny];
-            switch (dy) {
-              case 0:
-                alive = most;
-                break;
-              case 1:
-                most <<= 4;
-                last >>= 60;
-                alive = most | last;
-                break;
-              case -1:
-                most >>= 4;
-                last <<= 60;
-                alive = most | last;
-                break;
+            if (dy != 0) {
+              alive <<= dy * 4;
+              last >>= dy * 60;
+              alive |= last;
             }
             neighbors[x][y] += alive;
           }
@@ -99,7 +85,6 @@ int main(void) {
   float seconds = (stop.tv_usec - start.tv_usec) / 1e6 + stop.tv_sec - start.tv_sec;
   int ops = rows * rows * gens;
 
-  printCells();
   std::cout << "C++ Efficiency in cellhz: " << ops / seconds << std::endl;
 
   return 0;
