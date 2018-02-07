@@ -1,11 +1,10 @@
+#include <ctime>
 #include <iostream>
-#include <string.h>
-#include <sys/time.h>
 
-#define rows 1024
-#define cols rows / 16
-#define gens 10
-#define all_on 0x1111111111111111
+constexpr int rows = 1024;
+constexpr int cols = rows / 16;
+constexpr int gens = 10;
+constexpr uint64_t all_on = 0x1111111111111111;
 
 uint64_t cells[rows][cols];
 uint64_t neighbors[rows][cols];
@@ -27,7 +26,7 @@ void printCells() {
       bool on = ((cells[x][0] >> uint(60-y*4))&1) == 1;
       std::cout << (on ? "o" : " ");
     }
-    std::cout << "\n";
+    std::cout << std::endl;
   }
 }
 
@@ -39,23 +38,26 @@ uint64_t next(uint64_t alive, uint64_t neighbors) {
 }
 
 void nextGeneration() {
-  memset(&neighbors, 0, sizeof neighbors);
+  for (int x = 0; x < rows; ++x) {
+    for (int y = 0; y < cols; ++y) {
+      neighbors[x][y] = 0;
+    }
+  }
 
-  for (int dx = -1; dx <= 1; ++dx) {
-    for (int dy = -1; dy <= 1; ++dy) {
-      if (dx != 0 || dy != 0) {
-        for (int x = 0; x < rows; ++x) {
-          for (int y = 0; y < cols; ++y) {
+  for (int x = 0; x < rows; ++x) {
+    for (int y = 0; y < cols; ++y) {
+      for (int dx = -1; dx <= 1; ++dx) {
+        for (int dy = -1; dy <= 1; ++dy) {
+          if (dx != 0 || dy != 0) {
             int nx = (rows + x + dx) % rows;
             int ny = (cols + y + dy) % cols;
-
             uint64_t alive = cells[nx][y];
-            uint64_t last = cells[nx][ny];
+            uint64_t last = cells[nx][ny] >> dy * 60;
+
             if (dy != 0) {
-              alive <<= dy * 4;
-              last >>= dy * 60;
-              alive |= last;
+              alive = (alive << dy * 4) | last;
             }
+
             neighbors[x][y] += alive;
           }
         }
@@ -73,19 +75,16 @@ void nextGeneration() {
 int main(void) {
   randomizeCells();
 
-  struct timeval start, stop;
-  gettimeofday(&start, NULL);
+  std::clock_t start, stop;
+  start = std::clock();
 
   for (int i = 0; i < gens; ++i) {
     nextGeneration();
   }
 
-  gettimeofday(&stop, NULL);
-
-  float seconds = (stop.tv_usec - start.tv_usec) / 1e6 + stop.tv_sec - start.tv_sec;
-  int ops = rows * rows * gens;
-
-  std::cout << "C++ Efficiency in cellhz: " << ops / seconds << std::endl;
+  stop = std::clock();
+  float efficiency = float(long(rows) * rows * gens) / (stop - start) * CLOCKS_PER_SEC;
+  std::cout << "C++ Efficiency in cellhz: " << efficiency << std::endl;
 
   return 0;
 }
