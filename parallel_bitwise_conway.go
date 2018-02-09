@@ -43,7 +43,7 @@ func next(alive uint64, n uint64) uint64 {
 	b4 := (n & (allOn << 2)) >> 2
 	b2 := (n & (allOn << 1)) >> 1
 	b1 := n & allOn
-	return ((b1 & b2) | (b2 & alive &^ b1)) &^ b4
+	return b2 & (b1 | alive) &^ b4
 }
 
 func boundX(x int) int {

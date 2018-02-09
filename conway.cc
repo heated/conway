@@ -1,7 +1,7 @@
 #include <ctime>
 #include <iostream>
 
-constexpr int rows = 1024;
+constexpr int rows = 1 << 10;
 constexpr int cols = rows / 16;
 constexpr int gens = 10;
 constexpr uint64_t all_on = 0x1111111111111111;
@@ -34,7 +34,7 @@ uint64_t next(uint64_t alive, uint64_t neighbors) {
   uint64_t b4 = (neighbors & (all_on << 2)) >> 2;
   uint64_t b2 = (neighbors & (all_on << 1)) >> 1;
   uint64_t b1 = neighbors & all_on;
-  return ((b1 & b2) | (b2 & alive & ~b1)) & ~b4;
+  return b2 & (b1 | alive) & ~b4;
 }
 
 void nextGeneration() {
@@ -52,10 +52,19 @@ void nextGeneration() {
             int nx = (rows + x + dx) % rows;
             int ny = (cols + y + dy) % cols;
             uint64_t alive = cells[nx][y];
-            uint64_t last = cells[nx][ny] >> dy * 60;
+            uint64_t last = cells[nx][ny];
 
-            if (dy != 0) {
-              alive = (alive << dy * 4) | last;
+            switch (dy) {
+            case 1:
+              alive <<= 4;
+              last >>= 60;
+              alive |= last;
+              break;
+            case -1:
+              alive >>= 4;
+              last <<= 60;
+              alive |= last;
+              break;
             }
 
             neighbors[x][y] += alive;
