@@ -37,6 +37,14 @@ uint64_t next(uint64_t alive, uint64_t neighbors) {
   return b2 & (b1 | alive) & ~b4;
 }
 
+void updateCells() {
+  for (int x = 0; x < rows; ++x) {
+    for (int y = 0; y < cols; ++y) {
+      cells[x][y] = next(cells[x][y], neighbors[x][y]);
+    }
+  }
+}
+
 void nextGeneration() {
   for (int x = 0; x < rows; ++x) {
     for (int y = 0; y < cols; ++y) {
@@ -69,11 +77,7 @@ void nextGeneration() {
     }
   }
 
-  for (int x = 0; x < rows; ++x) {
-    for (int y = 0; y < cols; ++y) {
-      cells[x][y] = next(cells[x][y], neighbors[x][y]);
-    }
-  }
+  updateCells();
 }
 
 int main(void) {

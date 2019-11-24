@@ -20,7 +20,7 @@ void printCells(unsigned int *cells) {
   std::cout << "\033[H\033[2J";
   for (int x = 0; x < rows && x < 16; ++x) {
     for (int y = 0; y < 16; ++y) {
-      int idx = x * rows + y/8;
+      int idx = x * cols + y/8;
       bool on = ((cells[idx] >> (28-(y%8)*4))&1) == 1;
       std::cout << (on ? "o" : " ");
     }
@@ -29,7 +29,7 @@ void printCells(unsigned int *cells) {
 }
 
 __global__
-void neighborKernel(int size, int rows, unsigned int *cells, unsigned int *neighbors) {
+void neighborKernel(int size, int cols, unsigned int *cells, unsigned int *neighbors) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   int stride = blockDim.x * gridDim.x;
   for (int i = index; i < size; i += stride) {
@@ -37,7 +37,7 @@ void neighborKernel(int size, int rows, unsigned int *cells, unsigned int *neigh
     for (int dx = -1; dx <= 1; ++dx) {
       for (int dy = -1; dy <= 1; ++dy) {
         if (dx != 0 || dy != 0) {
-          int ni = (size + i + dx * rows) % size;
+          int ni = (size + i + dx * cols) % size;
           int ny = (size + ni + dy) % size;
           unsigned int alive = cells[ni];
           unsigned int last = cells[ny];
@@ -90,7 +90,7 @@ int main(void) {
 
   cudaMemcpy(cells, gen1, space, cudaMemcpyHostToDevice);
   for (int i = 0; i < gens; ++i) {
-    neighborKernel<<<(size+255)/256, 256>>>(size, rows, cells, neighbors);
+    neighborKernel<<<(size+255)/256, 256>>>(size, cols, cells, neighbors);
     lifeKernel<<<(size+255)/256, 256>>>(size, cells, neighbors);
   }
   cudaMemcpy(result, cells, space, cudaMemcpyDeviceToHost);
