@@ -1,19 +1,21 @@
+#include <algorithm>
 #include <ctime>
 #include <iostream>
 
 constexpr int rows = 1 << 10;
-constexpr int cols = rows / 16;
-constexpr int gens = 10;
-constexpr uint64_t all_on = 0x1111111111111111;
+constexpr int cols = rows / 64;
+constexpr int gens = 100;
 
-uint64_t cells[rows][cols];
-uint64_t neighbors[rows][cols];
+uint64_t board1[rows][cols];
+uint64_t board2[rows][cols];
+auto cells = board1;
+auto buffer = board2;
 
 void randomizeCells() {
   for (int x = 0; x < rows; ++x) {
     for (int y = 0; y < cols; ++y) {
       for (int i = 0; i < 8; ++i) {
-        cells[x][y] = (cells[x][y] << 8) | (rand() & 0x11);
+        cells[x][y] = (cells[x][y] << 8) | (rand() & 0xff);
       }
     }
   }
@@ -23,61 +25,53 @@ void printCells() {
   std::cout << "\033[H\033[2J";
   for (int x = 0; x < rows && x < 16; ++x) {
     for (int y = 0; y < 16; ++y) {
-      bool on = ((cells[x][0] >> uint(60-y*4))&1) == 1;
+      bool on = ((cells[x][0] >> uint(63-y))&1) == 1;
       std::cout << (on ? "o" : " ");
     }
     std::cout << std::endl;
   }
 }
 
-uint64_t next(uint64_t alive, uint64_t neighbors) {
-  uint64_t b4 = (neighbors & (all_on << 2)) >> 2;
-  uint64_t b2 = (neighbors & (all_on << 1)) >> 1;
-  uint64_t b1 = neighbors & all_on;
-  return b2 & (b1 | alive) & ~b4;
-}
-
-void updateCells() {
-  for (int x = 0; x < rows; ++x) {
-    for (int y = 0; y < cols; ++y) {
-      cells[x][y] = next(cells[x][y], neighbors[x][y]);
-    }
-  }
-}
-
 void nextGeneration() {
-  for (int x = 0; x < rows; ++x) {
-    for (int y = 0; y < cols; ++y) {
-      neighbors[x][y] = 0;
-      for (int dx = -1; dx <= 1; ++dx) {
-        for (int dy = -1; dy <= 1; ++dy) {
+  for (int y = 0; y < rows; ++y) {
+    for (int x = 0; x < cols; ++x) {
+      uint64_t b1 = 0, b2 = 0, b4 = 0;
+
+      for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
           if (dx != 0 || dy != 0) {
-            int nx = (rows + x + dx) % rows;
-            int ny = (cols + y + dy) % cols;
-            uint64_t alive = cells[nx][y];
-            uint64_t last = cells[nx][ny];
+            int ny = (rows + y + dy) % rows;
+            int nx = (cols + x + dx) % cols;
+            uint64_t alive = cells[ny][x];
+            uint64_t last = cells[ny][nx];
 
             switch (dy) {
             case 1:
-              alive <<= 4;
-              last >>= 60;
+              alive <<= 1;
+              last >>= 63;
               alive |= last;
               break;
             case -1:
-              alive >>= 4;
-              last <<= 60;
+              alive >>= 1;
+              last <<= 63;
               alive |= last;
               break;
             }
 
-            neighbors[x][y] += alive;
+            uint64_t c2 = alive & b1;
+            uint64_t c4 = c2 & b2;
+            b1 ^= alive;
+            b2 ^= c2;
+            b4 |= c4;
           }
         }
       }
+
+      buffer[y][x] = b2 & (b1 | cells[y][x]) & !b4;
     }
   }
 
-  updateCells();
+  std::swap(cells, buffer);
 }
 
 int main(void) {

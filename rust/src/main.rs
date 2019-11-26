@@ -87,7 +87,7 @@ fn main() {
     }
 
     let duration = Instant::now() - start;
-    let cellhz = LOAD as u128 * 1_000_000 / duration.as_micros();
+    let cellhz = LOAD as f32 / 1000.0 / duration.as_micros() as f32;
     // print_cells(&cells);
-    println!("cellhz: {}", cellhz);
+    println!("cellghz: {}", cellhz);
 }
