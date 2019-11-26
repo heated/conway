@@ -45,7 +45,7 @@ void nextGeneration() {
             uint64_t alive = cells[ny][x];
             uint64_t last = cells[ny][nx];
 
-            switch (dy) {
+            switch (dx) {
             case 1:
               alive <<= 1;
               last >>= 63;
