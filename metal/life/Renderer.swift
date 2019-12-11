@@ -1,28 +1,32 @@
 import Metal
 import MetalKit
 
-let unit = MemoryLayout<UInt32>.stride
 let size = rows * cols
-let memSize = unit * Int(size)
+let memUnit = MemoryLayout<UInt32>.stride
+let memTotal = memUnit * Int(size)
+let gensPerFrame = 350
+let frameGensVariance = 6
 
-// 32 hardware threads
+let maxBuffersInFlight = 3
 let ceil = Int((size - 1)/256 + 1)
 let gridSize = MTLSizeMake(ceil, 1, 1)
 let threadGroupSize = MTLSizeMake(256, 1, 1)
 
 class Renderer: NSObject, MTKViewDelegate {
     public let device: MTLDevice
+    let inFlightSemaphore = DispatchSemaphore(value: maxBuffersInFlight)
     let commandQueue: MTLCommandQueue
     let simState: MTLComputePipelineState
     var drawState: MTLRenderPipelineState
     var vertexBuffer: MTLBuffer
     var cellsBuffer: MTLBuffer
     var newCellsBuffer: MTLBuffer
-    let vertexData: [Float] = [
-        -1, -1,
+    var sigRandom = true
+    let vertexData: [Float] = [ /// full-screen quad from triangles
+        -1, -1, /// lower left triangle
          1, -1,
         -1,  1,
-         1,  1,
+         1,  1, /// upper right triangle
          1, -1,
         -1,  1,
     ]
@@ -46,8 +50,8 @@ class Renderer: NSObject, MTKViewDelegate {
         
         let dataSize = vertexData.count * MemoryLayout.size(ofValue: vertexData[0])
         vertexBuffer = device.makeBuffer(bytes: vertexData, length: dataSize, options: [])!
-        cellsBuffer = device.makeBuffer(length: memSize)!
-        newCellsBuffer = device.makeBuffer(length: memSize)!
+        cellsBuffer = device.makeBuffer(length: memTotal)!
+        newCellsBuffer = device.makeBuffer(length: memTotal)!
         
         super.init()
         startEngine()
@@ -55,43 +59,57 @@ class Renderer: NSObject, MTKViewDelegate {
     
     func startEngine() {
         randomizeCells()
-        for _ in 0..<40 {
-            loopNextGen()
-        }
         
-        let _ = Timer.scheduledTimer(timeInterval: 5, target: self, selector: #selector(randomizeCells), userInfo: nil, repeats: true)
+        let _ = Timer.scheduledTimer(timeInterval: 0.7, target: self, selector: #selector(scheduleRandomization), userInfo: nil, repeats: true)
+    }
+    
+    @objc func scheduleRandomization() {
+        sigRandom = true
     }
 
-    @objc func randomizeCells() {
+    func randomizeCells() {
         let contents = cellsBuffer.contents()
         for index in 0..<size {
             let bytes = UInt32.random(in: 0..<UInt32.max)
             contents.storeBytes(of: bytes,
-                                toByteOffset: Int(index) * unit,
-                                as: UInt32.self);
+                                toByteOffset: Int(index) * memUnit,
+                                as: UInt32.self)
         }
     }
 
-    // takes up a slot in the commandqueue
-    // don't call >~50x from outside
-    func loopNextGen() {
+    func simulate() {
         let buffer = commandQueue.makeCommandBuffer()!
         let encoder = buffer.makeComputeCommandEncoder()!
-        buffer.addCompletedHandler { _ in
-            self.loopNextGen()
-        }
 
         encoder.setComputePipelineState(simState)
-        encoder.setBuffers([cellsBuffer, newCellsBuffer], offsets: [0, 0], range: 0..<2)
-        encoder.dispatchThreadgroups(gridSize, threadsPerThreadgroup: threadGroupSize)
-        swap(&cellsBuffer, &newCellsBuffer)
+        let lowerBound = gensPerFrame - frameGensVariance
+        let gens = Int.random(in: lowerBound..<gensPerFrame)
+        for _ in 0..<gens {
+            encoder.setBuffers([cellsBuffer, newCellsBuffer], offsets: [0, 0], range: 0..<2)
+            encoder.dispatchThreadgroups(gridSize, threadsPerThreadgroup: threadGroupSize)
+            swap(&cellsBuffer, &newCellsBuffer)
+        }
         encoder.endEncoding()
         buffer.commit()
     }
 
     func draw(in view: MTKView) {
         /// Per frame updates hare
+        _ = inFlightSemaphore.wait(timeout: DispatchTime.distantFuture)
+        
         if let commandBuffer = commandQueue.makeCommandBuffer() {
+            let semaphore = inFlightSemaphore
+            commandBuffer.addCompletedHandler { (_ commandBuffer)-> Swift.Void in
+                semaphore.signal()
+            }
+            
+            if sigRandom {
+                sigRandom = false
+                randomizeCells()
+            }
+            
+            simulate()
+            
             /// Delay getting the currentRenderPassDescriptor until we absolutely need it to avoid
             ///   holding onto the drawable and blocking the display pipeline any longer than necessary
             let renderPassDescriptor = view.currentRenderPassDescriptor

@@ -1,5 +1,6 @@
 #include <metal_stdlib>
 #import "Constants.h"
+
 using namespace metal;
 
 kernel void nextGen(const device uint* cells,
