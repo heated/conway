@@ -2,11 +2,10 @@ use rand::Rng;
 use std::mem;
 use std::time::Instant;
 
-const SIZE: usize = 1 << 10;
-const ROWS: usize = SIZE;
-const COLS: usize = SIZE / 128;
-const TOTAL_CELLS: u64 = SIZE as u64 * SIZE as u64;
-const TARGET_LOAD: u64 = 100_000_000;
+const ROWS: usize = 1 << 8;
+const COLS: usize = ROWS / 128;
+const TOTAL_CELLS: u64 = ROWS.pow(2) as u64;
+const TARGET_LOAD: u64 = 1_000_000_000;
 const GENS: u64 = TARGET_LOAD / TOTAL_CELLS;
 const LOAD: u64 = GENS * TOTAL_CELLS;
 
@@ -87,7 +86,7 @@ fn main() {
     }
 
     let duration = Instant::now() - start;
-    let cellhz = LOAD as f32 / 1000.0 / duration.as_micros() as f32;
+    let cellghz = LOAD as f32 / 1000.0 / duration.as_micros() as f32;
     // print_cells(&cells);
-    println!("cellghz: {}", cellhz);
+    println!("{:.1} cellghz", cellghz);
 }

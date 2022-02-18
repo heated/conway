@@ -1,5 +1,5 @@
 [package]
-name = "bitset-life"
+name = "bitwise-life"
 version = "0.1.0"
 authors = ["Edward Swernofsky <edabsw@gmail.com>"]
 edition = "2018"
