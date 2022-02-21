@@ -1,6 +1,6 @@
 use rand::Rng;
 use std::mem;
-use std::sync::{Arc, Barrier, RwLock, RwLockReadGuard};
+use std::sync::{Arc, Barrier, Mutex, RwLock, RwLockReadGuard};
 use std::thread;
 use std::time::Instant;
 
@@ -27,35 +27,33 @@ fn next_generation(chunks: Vec<RwLockReadGuard<Chunk>>,
 
             for dy in 0..3 {
                 for dx in 0..3 {
-                    if dy == 1 && dx == 1 {
-                        continue;
+                    if dy != 1 || dx != 1 {
+                        let ny = (ROWS + glob_y+dy - 1) % ROWS;
+                        let nz = ny / WORKER_ROWS;
+                        let nly = ny % WORKER_ROWS;
+
+                        let nx = (COLS + x+dx - 1) % COLS;
+                        let last = chunks[nz][nly][nx];
+                        let mut n_alive = chunks[nz][nly][x];
+
+                        match dx {
+                            2 => {
+                                n_alive <<= 1;
+                                n_alive |= last >> 127;
+                            },
+                            0 => {
+                                n_alive >>= 1;
+                                n_alive |= last << 127;
+                            },
+                            _ => {}
+                        }
+                        
+                        let c2 = n_alive & b1;
+                        let c4 = c2 & b2;
+                        b1 ^= n_alive;
+                        b2 ^= c2;
+                        b4 |= c4;
                     }
-
-                    let ny = (ROWS + glob_y+dy - 1) % ROWS;
-                    let nz = ny / WORKER_ROWS;
-                    let nly = ny % WORKER_ROWS;
-
-                    let nx = (COLS + x+dx - 1) % COLS;
-                    let last = chunks[nz][nly][nx];
-                    let mut alive = chunks[nz][nly][x];
-
-                    match dx {
-                        2 => {
-                            alive <<= 1;
-                            alive |= last >> 127;
-                        },
-                        0 => {
-                            alive >>= 1;
-                            alive |= last << 127;
-                        },
-                        _ => {}
-                    }
-                    
-                    let c2 = alive & b1;
-                    let c4 = c2 & b2;
-                    b1 ^= alive;
-                    b2 ^= c2;
-                    b4 |= c4;
                 }
             }
 
@@ -98,7 +96,7 @@ fn main() {
 
     for i in 0..NUM_WORKERS {
             chunks.push(Arc::new(RwLock::new(cells[i])));
-        buf_chunks.push(Arc::new(RwLock::new(buffer[i])));
+        buf_chunks.push(Arc::new(Mutex::new(buffer[i])));
     }
 
     let mut handles = Vec::with_capacity(NUM_WORKERS);
@@ -107,7 +105,8 @@ fn main() {
     for worker_i in 0..NUM_WORKERS {
         let barrier_c = Arc::clone(&barrier);
         let chunks_c: Vec<Arc<RwLock<Chunk>>> = chunks.iter()
-            .map(|c| c.clone()).collect();
+            .map(|c| c.clone())
+            .collect();
         let buf_chunk_c = Arc::clone(&buf_chunks[worker_i]);
 
         handles.push(thread::spawn(move || {
@@ -118,7 +117,7 @@ fn main() {
                     let chunks = chunks_c.iter()
                         .map(|c| c.read().unwrap())
                         .collect();
-                    let mut buf_chunk = buf_chunk_c.write().unwrap();
+                    let mut buf_chunk = buf_chunk_c.lock().unwrap();
                     next_generation(chunks, &mut buf_chunk, worker_i);
                 }
 
@@ -134,8 +133,8 @@ fn main() {
     for _ in 0..GENS {
         barrier.wait();
         for i in 0..NUM_WORKERS {
-            let     chunk = &mut     *chunks[i].write().unwrap();
-            let buf_chunk = &mut *buf_chunks[i].write().unwrap();
+            let     chunk = &mut *chunks[i].write().unwrap();
+            let buf_chunk = &mut *buf_chunks[i].lock().unwrap();
             mem::swap(chunk, buf_chunk);
         }
         barrier.wait();

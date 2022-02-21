@@ -1,10 +1,14 @@
 #include <algorithm>
 #include <ctime>
 #include <iostream>
+#include <iomanip>
 
-constexpr int rows = 1 << 10;
-constexpr int cols = rows / 64;
-constexpr int gens = 100;
+constexpr uint32_t rows = 1 << 8;
+constexpr uint32_t cols = rows / 64;
+constexpr uint64_t target_load = 1e9;
+constexpr uint64_t total_cells = rows * rows;
+constexpr uint64_t gens = target_load / total_cells;
+constexpr uint64_t total_cell_updates = gens * total_cells;
 
 uint64_t board1[rows][cols];
 uint64_t board2[rows][cols];
@@ -12,20 +16,20 @@ auto cells = board1;
 auto buffer = board2;
 
 void randomizeCells() {
-  for (int x = 0; x < rows; ++x) {
-    for (int y = 0; y < cols; ++y) {
+  for (int y = 0; y < rows; ++y) {
+    for (int x = 0; x < cols; ++x) {
       for (int i = 0; i < 8; ++i) {
-        cells[x][y] = (cells[x][y] << 8) | (rand() & 0xff);
+        cells[y][x] = (cells[y][x] << 8) | (rand() & 0xff);
       }
     }
   }
 }
 
 void printCells() {
-  std::cout << "\033[H\033[2J";
-  for (int x = 0; x < rows && x < 16; ++x) {
-    for (int y = 0; y < 16; ++y) {
-      bool on = ((cells[x][0] >> uint(63-y))&1) == 1;
+  //std::cout << "\033[H\033[2J";
+  for (int y = 0; y < rows && y < 16; ++y) {
+    for (int x = 0; x < 16; ++x) {
+      bool on = ((cells[y][0] >> uint(63-x))&1) == 1;
       std::cout << (on ? "o" : " ");
     }
     std::cout << std::endl;
@@ -67,7 +71,7 @@ void nextGeneration() {
         }
       }
 
-      buffer[y][x] = b2 & (b1 | cells[y][x]) & !b4;
+      buffer[y][x] = b2 & (b1 | cells[y][x]) & ~b4;
     }
   }
 
@@ -85,8 +89,12 @@ int main(void) {
   }
 
   stop = std::clock();
-  float efficiency = float(long(rows) * rows * gens) / (stop - start) * CLOCKS_PER_SEC;
-  std::cout << "C++ Efficiency in cellhz: " << efficiency << std::endl;
+  float duration_sec = 1.0 * (stop - start) / CLOCKS_PER_SEC;
+  float cellghz = total_cell_updates / duration_sec / 1e9;
+  std::cout << std::fixed;
+  std::cout << std::setprecision(1);
+  std::cout << "C++ implementation cellghz: " << cellghz << std::endl;
+  // printCells();
 
   return 0;
 }

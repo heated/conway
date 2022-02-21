@@ -18,32 +18,30 @@ fn next_generation(cells: &mut Grid, buffer: &mut Grid) {
 
             for dy in 0..3 {
                 for dx in 0..3 {
-                    if dy == 1 && dx == 1 {
-                        continue;
-                    }
+                    if dy != 1 || dx != 1 {
+                        let ny = (ROWS + y+dy - 1) % ROWS;
+                        let nx = (COLS + x+dx - 1) % COLS;
+                        let last = cells[ny][nx];
+                        let mut alive = cells[ny][x];
 
-                    let ny = (ROWS + y+dy - 1) % ROWS;
-                    let nx = (COLS + x+dx - 1) % COLS;
-                    let last = cells[ny][nx];
-                    let mut alive = cells[ny][x];
-
-                    match dx {
-                        2 => {
-                            alive <<= 1;
-                            alive |= last >> 127;
-                        },
-                        0 => {
-                            alive >>= 1;
-                            alive |= last << 127;
+                        match dx {
+                            2 => {
+                                alive <<= 1;
+                                alive |= last >> 127;
+                            },
+                            0 => {
+                                alive >>= 1;
+                                alive |= last << 127;
+                            }
+                            _ => {}
                         }
-                        _ => {}
+                        
+                        let c2 = alive & b1;
+                        let c4 = c2 & b2;
+                        b1 ^= alive;
+                        b2 ^= c2;
+                        b4 |= c4;
                     }
-                    
-                    let c2 = alive & b1;
-                    let c4 = c2 & b2;
-                    b1 ^= alive;
-                    b2 ^= c2;
-                    b4 |= c4;
                 }
             }
 
