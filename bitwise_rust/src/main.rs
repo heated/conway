@@ -6,10 +6,13 @@ const ROWS: usize = 1 << 8;
 const COLS: usize = ROWS / 128;
 const TOTAL_CELLS: u64 = ROWS.pow(2) as u64;
 const TARGET_LOAD: u64 = 1_000_000_000;
-const GENS: u64 = TARGET_LOAD / TOTAL_CELLS;
-const LOAD: u64 = GENS * TOTAL_CELLS;
 
-type Grid = [[u128; COLS]; ROWS];
+// want at least 1 but std::cmp::max isn't a const fn
+const GENS: u64 = 1 + TARGET_LOAD / TOTAL_CELLS;
+const TOTAL_CELL_UPDATES: u64 = GENS * TOTAL_CELLS;
+
+// heap allocate
+type Grid = Box<[[u128; COLS]]>;
 
 fn next_generation(cells: &mut Grid, buffer: &mut Grid) {
     for y in 0..ROWS {
@@ -49,6 +52,7 @@ fn next_generation(cells: &mut Grid, buffer: &mut Grid) {
         }
     }
 
+    // just swap refs, not data
     mem::swap(cells, buffer);
 }
 
@@ -74,8 +78,9 @@ fn print_cells(cells: &Grid) {
 }
 
 fn main() {
-    let mut cells = [[0; COLS]; ROWS];
-    let mut buffer = [[0; COLS]; ROWS];
+    // allocate cells on heap
+    let mut cells = Vec::from([[0; COLS]; ROWS]).into_boxed_slice();
+    let mut buffer = cells.clone();
     randomize_cells(&mut cells);
     let start = Instant::now();
 
@@ -84,7 +89,7 @@ fn main() {
     }
 
     let duration = Instant::now() - start;
-    let cellghz = LOAD as f32 / 1000.0 / duration.as_micros() as f32;
+    let cellghz = TOTAL_CELL_UPDATES as f32 / 1000.0 / duration.as_micros() as f32;
     // print_cells(&cells);
     println!("{:.1} cellghz", cellghz);
 }

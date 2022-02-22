@@ -8,13 +8,14 @@ const ROWS: usize = 1 << 12;
 const COLS: usize = ROWS / 128;
 const TOTAL_CELLS: u64 = ROWS.pow(2) as u64;
 const TARGET_LOAD: u64 = 5_000_000_000;
-const GENS: u64 = TARGET_LOAD / TOTAL_CELLS;
+
+// want at least 1 but std::cmp::max isn't a const fn
+const GENS: u64 = 1 + TARGET_LOAD / TOTAL_CELLS;
 const LOAD: u64 = GENS * TOTAL_CELLS;
 const NUM_WORKERS: usize = 2;
 const WORKER_ROWS: usize = ROWS / NUM_WORKERS;
 
-type Chunk = [[u128; COLS]; WORKER_ROWS];
-type Grid = [Chunk; NUM_WORKERS];
+type Chunk = Box<[[u128; COLS]]>;
 
 fn next_generation(chunks: Vec<RwLockReadGuard<Chunk>>, 
                    buf_chunk: &mut Chunk, 
@@ -63,13 +64,14 @@ fn next_generation(chunks: Vec<RwLockReadGuard<Chunk>>,
     }
 }
 
-fn randomize_cells(cells: &mut Grid) {
+fn randomize_chunks(chunks: &mut Vec<Arc<RwLock<Chunk>>>) {
     let mut rng = rand::thread_rng();
 
     for z in 0..NUM_WORKERS {
+        let mut chunk = chunks[z].write().unwrap();
         for y in 0..WORKER_ROWS {
             for x in 0..COLS {
-                cells[z][y][x] = rng.gen();
+                chunk[y][x] = rng.gen();
             }
         }
     }
@@ -87,18 +89,19 @@ fn print_cells(chunks: &Vec<RwLockReadGuard<Chunk>>) {
 }
 
 fn main() {
-    let mut cells = [[[0; COLS]; WORKER_ROWS]; NUM_WORKERS];
-    let buffer = cells;
-
-    randomize_cells(&mut cells);
     let mut     chunks = Vec::with_capacity(NUM_WORKERS);
     let mut buf_chunks = Vec::with_capacity(NUM_WORKERS);
 
-    for i in 0..NUM_WORKERS {
-            chunks.push(Arc::new(RwLock::new(cells[i])));
-        buf_chunks.push(Arc::new(Mutex::new(buffer[i])));
+    for _ in 0..NUM_WORKERS {
+        // allocate on heap
+        let raw_chunk = Vec::from([[0; COLS]; WORKER_ROWS]).into_boxed_slice();
+        let raw_buf_chunk = raw_chunk.clone();
+
+            chunks.push(Arc::new(RwLock::new(raw_chunk)));
+        buf_chunks.push(Arc::new(Mutex::new(raw_buf_chunk)));
     }
 
+    randomize_chunks(&mut chunks);
     let mut handles = Vec::with_capacity(NUM_WORKERS);
     let barrier = Arc::new(Barrier::new(1 + NUM_WORKERS));
 
