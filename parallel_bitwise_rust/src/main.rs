@@ -1,7 +1,7 @@
+use crossbeam::thread;
 use rand::Rng;
 use std::mem;
-use std::sync::{Arc, Barrier, Mutex, RwLock, RwLockReadGuard};
-use std::thread;
+use std::sync::{Barrier, Mutex, RwLock};
 use std::time::Instant;
 
 const ROWS: usize = 1 << 12;
@@ -15,11 +15,16 @@ const LOAD: u64 = GENS * TOTAL_CELLS;
 const NUM_WORKERS: usize = 2;
 const WORKER_ROWS: usize = ROWS / NUM_WORKERS;
 
-type Chunk = Box<[[u128; COLS]]>;
+type Chunk = [[u128; COLS]; WORKER_ROWS];
+// type Chunk = Box<[[u128; COLS]; WORKER_ROWS]>;
+// type World = Arc<RwLock<Vec<Chunk>>>;
 
-fn next_generation(chunks: Vec<RwLockReadGuard<Chunk>>, 
-                   buf_chunk: &mut Chunk, 
+fn next_generation(chunks: &RwLock<Vec<&mut Chunk>>,
+                   buf_chunk: &Mutex<&mut Chunk>,
                    chunk_i: usize) {
+    let chunks_r = chunks.read().unwrap();
+    let mut buf_chunk_w = buf_chunk.lock().unwrap();
+
     for y in 0..WORKER_ROWS {
         let glob_y = WORKER_ROWS*chunk_i + y;
 
@@ -34,8 +39,8 @@ fn next_generation(chunks: Vec<RwLockReadGuard<Chunk>>,
                         let nly = ny % WORKER_ROWS;
 
                         let nx = (COLS + x+dx - 1) % COLS;
-                        let last = chunks[nz][nly][nx];
-                        let mut n_alive = chunks[nz][nly][x];
+                        let last = chunks_r[nz][nly][nx];
+                        let mut n_alive = chunks_r[nz][nly][x];
 
                         match dx {
                             2 => {
@@ -58,30 +63,32 @@ fn next_generation(chunks: Vec<RwLockReadGuard<Chunk>>,
                 }
             }
 
-            let alive = chunks[chunk_i][y][x];
-            buf_chunk[y][x] = b2 & (b1 | alive) & !b4;
+            let alive = chunks_r[chunk_i][y][x];
+            buf_chunk_w[y][x] = b2 & (b1 | alive) & !b4;
         }
     }
 }
 
-fn randomize_chunks(chunks: &mut Vec<Arc<RwLock<Chunk>>>) {
+fn randomize_chunks(chunks: &RwLock<Vec<&mut Chunk>>) {
     let mut rng = rand::thread_rng();
+    let mut chunks_w = chunks.write().unwrap();
 
     for z in 0..NUM_WORKERS {
-        let mut chunk = chunks[z].write().unwrap();
         for y in 0..WORKER_ROWS {
             for x in 0..COLS {
-                chunk[y][x] = rng.gen();
+                chunks_w[z][y][x] = rng.gen();
             }
         }
     }
 }
 
 #[allow(dead_code)]
-fn print_cells(chunks: &Vec<RwLockReadGuard<Chunk>>) {
+fn print_cells(chunks: &RwLock<Vec<&mut Chunk>>) {
+    let chunks_r = chunks.read().unwrap();
+
     for y in 0..16 {
         for x in 0..32 {
-            let on = ((chunks[0][y][0] >> (127-x))&1) == 1;
+            let on = ((chunks_r[0][y][0] >> (127-x))&1) == 1;
             print!("{}", if on { "o" } else { " " });
         }
         println!();
@@ -89,70 +96,56 @@ fn print_cells(chunks: &Vec<RwLockReadGuard<Chunk>>) {
 }
 
 fn main() {
-    let mut     chunks = Vec::with_capacity(NUM_WORKERS);
-    let mut buf_chunks = Vec::with_capacity(NUM_WORKERS);
+    // heap allocate contiguously
+    let mut raw_chunks = [[[0; COLS]; WORKER_ROWS]; NUM_WORKERS];
+    let mut raw_buf_chunks = raw_chunks.clone();
 
-    for _ in 0..NUM_WORKERS {
-        // allocate on heap
-        let raw_chunk = Vec::from([[0; COLS]; WORKER_ROWS]).into_boxed_slice();
-        let raw_buf_chunk = raw_chunk.clone();
-
-            chunks.push(Arc::new(RwLock::new(raw_chunk)));
-        buf_chunks.push(Arc::new(Mutex::new(raw_buf_chunk)));
-    }
+    let mut chunks = RwLock::new(
+        raw_chunks.chunks_exact_mut(1)
+        .map(|c| &mut c[0])
+        .collect());
+    let buf_chunks: Vec<Mutex<&mut Chunk>> = raw_buf_chunks
+        .chunks_exact_mut(1)
+        .map(|c| &mut c[0])
+        .map(Mutex::new)
+        .collect();
 
     randomize_chunks(&mut chunks);
-    let mut handles = Vec::with_capacity(NUM_WORKERS);
-    let barrier = Arc::new(Barrier::new(1 + NUM_WORKERS));
+    let barrier = Barrier::new(1 + NUM_WORKERS);
 
-    for worker_i in 0..NUM_WORKERS {
-        let barrier_c = Arc::clone(&barrier);
-        let chunks_c: Vec<Arc<RwLock<Chunk>>> = chunks.iter()
-            .map(|c| c.clone())
-            .collect();
-        let buf_chunk_c = Arc::clone(&buf_chunks[worker_i]);
+    thread::scope(|s| {
+        for worker_i in 0..NUM_WORKERS {
+            let barrier_ref = &barrier;
+            let chunks_ref = &chunks;
+            let buf_chunk_ref = &buf_chunks[worker_i];
 
-        handles.push(thread::spawn(move || {
-            barrier_c.wait();
-
-            for _ in 0..GENS {
-                {
-                    let chunks = chunks_c.iter()
-                        .map(|c| c.read().unwrap())
-                        .collect();
-                    let mut buf_chunk = buf_chunk_c.lock().unwrap();
-                    next_generation(chunks, &mut buf_chunk, worker_i);
+            s.spawn(move |_| {
+                for _ in 0..GENS {
+                    barrier_ref.wait();
+                    next_generation(chunks_ref, buf_chunk_ref, worker_i);
+                    barrier_ref.wait();
                 }
-
-                barrier_c.wait();
-                barrier_c.wait();
-            }
-        }));
-    }
-
-    let start = Instant::now();
-    barrier.wait();
-
-    for _ in 0..GENS {
-        barrier.wait();
-        for i in 0..NUM_WORKERS {
-            let     chunk = &mut *chunks[i].write().unwrap();
-            let buf_chunk = &mut *buf_chunks[i].lock().unwrap();
-            mem::swap(chunk, buf_chunk);
+            });
         }
-        barrier.wait();
-    }
 
-    let duration = Instant::now() - start;
-    let cellghz = LOAD as f32 / 1000.0 / duration.as_micros() as f32;
-    println!("{:.1} cellghz", cellghz);
+        let start = Instant::now();
 
-    for handle in handles {
-        handle.join().unwrap();
-    }
+        for _ in 0..GENS {
+            barrier.wait();
+            barrier.wait();
 
-    // let unpacked = chunks.iter()
-    //     .map(|c| c.read().unwrap())
-    //     .collect();
-    // print_cells(&unpacked);
+            let mut chunks_w = chunks.write().unwrap();
+            for i in 0..NUM_WORKERS {
+                let chunk_ref = &mut chunks_w[i];
+                let buf_chunk_ref = &mut *buf_chunks[i].lock().unwrap();
+                mem::swap(chunk_ref, buf_chunk_ref);
+            }
+        }
+
+        let duration = Instant::now() - start;
+        let cellghz = LOAD as f32 / duration.as_nanos() as f32;
+        println!("{:.1} cellghz", cellghz);
+    }).unwrap();
+
+    // print_cells(&chunks);
 }
