@@ -5,14 +5,13 @@ use std::time::Instant;
 const ROWS: usize = 1 << 8;
 const COLS: usize = ROWS / 128;
 const TOTAL_CELLS: u64 = ROWS.pow(2) as u64;
-const TARGET_LOAD: u64 = 1_000_000_000;
+const TARGET_LOAD: u64 = 3_000_000_000;
 
 // want at least 1 but std::cmp::max isn't a const fn
 const GENS: u64 = 1 + TARGET_LOAD / TOTAL_CELLS;
 const TOTAL_CELL_UPDATES: u64 = GENS * TOTAL_CELLS;
 
-// heap allocate
-type Grid = Box<[[u128; COLS]]>;
+type Grid = [[u128; COLS]; ROWS];
 
 fn next_generation(cells: &mut Grid, buffer: &mut Grid) {
     for y in 0..ROWS {
@@ -51,9 +50,6 @@ fn next_generation(cells: &mut Grid, buffer: &mut Grid) {
             buffer[y][x] = b2 & (b1 | cells[y][x]) & !b4;
         }
     }
-
-    // just swap refs, not data
-    mem::swap(cells, buffer);
 }
 
 fn randomize_cells(cells: &mut Grid) {
@@ -78,18 +74,24 @@ fn print_cells(cells: &Grid) {
 }
 
 fn main() {
-    // allocate cells on heap
-    let mut cells = Vec::from([[0; COLS]; ROWS]).into_boxed_slice();
-    let mut buffer = cells.clone();
-    randomize_cells(&mut cells);
+    // heap allocate
+    let mut cells_box = Vec::from([[[0; COLS]; ROWS]; 1]).into_boxed_slice();
+    let mut buf_box = cells_box.clone();
+    let mut cells = &mut cells_box[0];
+    let mut buffer = &mut buf_box[0];
+
+    randomize_cells(cells);
     let start = Instant::now();
 
     for _ in 0..GENS {
-        next_generation(&mut cells, &mut buffer);
+        next_generation(cells, buffer);
+
+        // just swap refs, not data
+        mem::swap(&mut cells, &mut buffer);
     }
 
     let duration = Instant::now() - start;
-    let cellghz = TOTAL_CELL_UPDATES as f32 / 1000.0 / duration.as_micros() as f32;
+    let cellghz = TOTAL_CELL_UPDATES as f32 / duration.as_nanos() as f32;
     // print_cells(&cells);
     println!("{:.1} cellghz", cellghz);
 }

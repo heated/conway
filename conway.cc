@@ -5,7 +5,7 @@
 
 constexpr uint32_t rows = 1 << 8;
 constexpr uint32_t cols = rows / 64;
-constexpr uint64_t target_load = 1e9;
+constexpr uint64_t target_load = 2e9;
 constexpr uint64_t total_cells = rows * rows;
 constexpr uint64_t gens = target_load / total_cells;
 constexpr uint64_t total_cell_updates = gens * total_cells;

@@ -16,8 +16,6 @@ const NUM_WORKERS: usize = 2;
 const WORKER_ROWS: usize = ROWS / NUM_WORKERS;
 
 type Chunk = [[u128; COLS]; WORKER_ROWS];
-// type Chunk = Box<[[u128; COLS]; WORKER_ROWS]>;
-// type World = Arc<RwLock<Vec<Chunk>>>;
 
 fn next_generation(chunks: &RwLock<Vec<&mut Chunk>>,
                    buf_chunk: &Mutex<&mut Chunk>,
@@ -100,14 +98,13 @@ fn main() {
     let mut raw_chunks = [[[0; COLS]; WORKER_ROWS]; NUM_WORKERS];
     let mut raw_buf_chunks = raw_chunks.clone();
 
-    let mut chunks = RwLock::new(
+    let mut chunks: RwLock<Vec<&mut Chunk>> = RwLock::new(
         raw_chunks.chunks_exact_mut(1)
         .map(|c| &mut c[0])
         .collect());
     let buf_chunks: Vec<Mutex<&mut Chunk>> = raw_buf_chunks
         .chunks_exact_mut(1)
-        .map(|c| &mut c[0])
-        .map(Mutex::new)
+        .map(|c| Mutex::new(&mut c[0]))
         .collect();
 
     randomize_chunks(&mut chunks);
