@@ -75,7 +75,7 @@ fn print_cells(cells: &Grid) {
 
 fn main() {
     // heap allocate
-    let mut cells_box = Vec::from([[[0; COLS]; ROWS]; 1]).into_boxed_slice();
+    let mut cells_box = vec![[[0; COLS]; ROWS]; 1].into_boxed_slice();
     let mut buf_box = cells_box.clone();
     let mut cells = &mut cells_box[0];
     let mut buffer = &mut buf_box[0];

@@ -95,10 +95,10 @@ fn print_cells(chunks: &RwLock<Vec<&mut Chunk>>) {
 
 fn main() {
     // heap allocate contiguously
-    let mut raw_chunks = [[[0; COLS]; WORKER_ROWS]; NUM_WORKERS];
+    let mut raw_chunks = vec![[[0; COLS]; WORKER_ROWS]; NUM_WORKERS].into_boxed_slice();
     let mut raw_buf_chunks = raw_chunks.clone();
 
-    let mut chunks: RwLock<Vec<&mut Chunk>> = RwLock::new(
+    let mut chunks = RwLock::new(
         raw_chunks.chunks_exact_mut(1)
         .map(|c| &mut c[0])
         .collect());
